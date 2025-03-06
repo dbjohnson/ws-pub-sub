@@ -1,6 +1,6 @@
 # ws-pub-sub
 
-[![Go](https://github.com/username/ws-pub-sub/actions/workflows/go.yml/badge.svg)](https://github.com/username/ws-pub-sub/actions/workflows/go.yml)
+[![Go](https://github.com/dbjohnson/ws-pub-sub/actions/workflows/go.yml/badge.svg)](https://github.com/dbjohnson/ws-pub-sub/actions/workflows/go.yml)
 
 A minimal Go WebSocket-based pub/sub server with topic-based message routing.
 
