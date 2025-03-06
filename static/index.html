@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket Pub/Sub Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      display: flex;
+      gap: 20px;
+    }
+
+    .panel {
+      flex: 1;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 15px;
+    }
+
+    .message-container {
+      height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      margin-bottom: 10px;
+      padding: 10px;
+    }
+
+    .message {
+      border-bottom: 1px solid #eee;
+      padding: 5px 0;
+    }
+
+    .controls {
+      margin-top: 10px;
+    }
+
+    input,
+    textarea,
+    button,
+    select {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      height: 100px;
+      resize: vertical;
+    }
+
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    .status {
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+
+    .status.connected {
+      color: green;
+    }
+
+    .status.disconnected {
+      color: red;
+    }
+
+    #stats {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f9f9f9;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>WebSocket Pub/Sub Demo</h1>
+  <div class="status disconnected" id="connection-status">Disconnected</div>
+
+  <div class="container">
+    <div class="panel">
+      <h2>Subscribe</h2>
+      <div>
+        <input type="text" id="subscribe-topic" placeholder="Topic to subscribe to">
+        <button id="subscribe-btn">Subscribe</button>
+      </div>
+      <div class="controls">
+        <select id="topic-list" size="5" multiple></select>
+        <button id="unsubscribe-btn">Unsubscribe Selected</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Publish</h2>
+      <div>
+        <input type="text" id="publish-topic" placeholder="Topic to publish to">
+        <textarea id="publish-payload" placeholder="Message payload (JSON)"></textarea>
+        <button id="publish-btn">Publish</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>Messages</h2>
+  <div class="message-container" id="messages"></div>
+
+  <div id="stats">
+    <h2>Server Statistics</h2>
+    <pre id="stats-content">Loading...</pre>
+    <button id="refresh-stats">Refresh Stats</button>
+  </div>
+
+  <script>
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+    const statsUrl = `${window.location.protocol}//${window.location.host}/stats`;
+
+    let socket;
+    let subscribedTopics = new Set();
+
+    function connect() {
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = function (e) {
+        document.getElementById('connection-status').textContent = 'Connected';
+        document.getElementById('connection-status').classList.remove('disconnected');
+        document.getElementById('connection-status').classList.add('connected');
+        addMessage('System', 'Connection established');
+      };
+
+      socket.onmessage = function (event) {
+        try {
+          const message = JSON.parse(event.data);
+          addMessage(message.topic, JSON.stringify(message.payload, null, 2));
+        } catch (e) {
+          addMessage('Error', 'Failed to parse message: ' + e.message);
+        }
+      };
+
+      socket.onclose = function (event) {
+        if (event.wasClean) {
+          addMessage('System', `Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+        } else {
+          addMessage('System', 'Connection died');
+        }
+        document.getElementById('connection-status').textContent = 'Disconnected';
+        document.getElementById('connection-status').classList.remove('connected');
+        document.getElementById('connection-status').classList.add('disconnected');
+
+        // Attempt to reconnect after 5 seconds
+        setTimeout(connect, 5000);
+      };
+
+      socket.onerror = function (error) {
+        addMessage('Error', `WebSocket Error: ${error.message}`);
+      };
+    }
+
+    function addMessage(topic, content) {
+      const messagesContainer = document.getElementById('messages');
+      const messageElement = document.createElement('div');
+      messageElement.className = 'message';
+      messageElement.innerHTML = `
+                <strong>${topic}</strong>
+                <pre>${content}</pre>
+                <small>${new Date().toLocaleTimeString()}</small>
+            `;
+      messagesContainer.appendChild(messageElement);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function subscribe(topic) {
+      if (!topic || subscribedTopics.has(topic)) return;
+
+      const message = {
+        action: 'subscribe',
+        topic: topic
+      };
+
+      socket.send(JSON.stringify(message));
+      subscribedTopics.add(topic);
+      updateTopicList();
+      addMessage('System', `Subscribed to topic: ${topic}`);
+    }
+
+    function unsubscribe(topic) {
+      if (!topic || !subscribedTopics.has(topic)) return;
+
+      const message = {
+        action: 'unsubscribe',
+        topic: topic
+      };
+
+      socket.send(JSON.stringify(message));
+      subscribedTopics.delete(topic);
+      updateTopicList();
+      addMessage('System', `Unsubscribed from topic: ${topic}`);
+    }
+
+    function publish(topic, payload) {
+      if (!topic) return;
+
+      try {
+        const jsonPayload = payload ? JSON.parse(payload) : {};
+        const message = {
+          action: 'publish',
+          topic: topic,
+          payload: jsonPayload
+        };
+
+        socket.send(JSON.stringify(message));
+        addMessage('System', `Published to topic: ${topic}`);
+      } catch (e) {
+        addMessage('Error', 'Invalid JSON payload: ' + e.message);
+      }
+    }
+
+    function updateTopicList() {
+      const topicList = document.getElementById('topic-list');
+      topicList.innerHTML = '';
+
+      subscribedTopics.forEach(topic => {
+        const option = document.createElement('option');
+        option.value = topic;
+        option.textContent = topic;
+        topicList.appendChild(option);
+      });
+    }
+
+    function fetchStats() {
+      fetch(statsUrl)
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('stats-content').textContent = JSON.stringify(data, null, 2);
+        })
+        .catch(error => {
+          document.getElementById('stats-content').textContent = `Error fetching stats: ${error.message}`;
+        });
+    }
+
+    // Event Listeners
+    document.getElementById('subscribe-btn').addEventListener('click', () => {
+      const topic = document.getElementById('subscribe-topic').value.trim();
+      subscribe(topic);
+      document.getElementById('subscribe-topic').value = '';
+    });
+
+    document.getElementById('unsubscribe-btn').addEventListener('click', () => {
+      const topicList = document.getElementById('topic-list');
+      Array.from(topicList.selectedOptions).forEach(option => {
+        unsubscribe(option.value);
+      });
+    });
+
+    document.getElementById('publish-btn').addEventListener('click', () => {
+      const topic = document.getElementById('publish-topic').value.trim();
+      const payload = document.getElementById('publish-payload').value.trim();
+      publish(topic, payload);
+    });
+
+    document.getElementById('refresh-stats').addEventListener('click', fetchStats);
+
+    // Initialize
+    connect();
+    fetchStats();
+    setInterval(fetchStats, 5000); // Refresh stats every 5 seconds
+  </script>
+</body>
+
+</html>
