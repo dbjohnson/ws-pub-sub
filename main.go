@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,11 +20,46 @@ type Config struct {
 	WriteBufferSize int
 }
 
+// LoadConfigFromEnv loads configuration from environment variables with defaults
+func LoadConfigFromEnv() Config {
+	config := Config{
+		Host:            getEnv("WS_HOST", ""),
+		Port:            getEnv("WS_PORT", "8080"),
+		ReadBufferSize:  getEnvAsInt("WS_READ_BUFFER_SIZE", 1024),
+		WriteBufferSize: getEnvAsInt("WS_WRITE_BUFFER_SIZE", 1024),
+	}
+	return config
+}
+
+// Helper function to read environment variables with defaults
+func getEnv(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+// Helper function to read environment variables as integers with defaults
+func getEnvAsInt(key string, defaultValue int) int {
+	valueStr := getEnv(key, "")
+	if valueStr == "" {
+		return defaultValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		log.Printf("Warning: Environment variable %s is not a valid integer. Using default value %d", key, defaultValue)
+		return defaultValue
+	}
+	return value
+}
+
 // Stats represents server statistics
 type Stats struct {
-	Topics           int            `json:"topics"`
-	Subscribers      int            `json:"subscribers"`
-	MessageRateTotal float64        `json:"message_rate_total"`
+	Topics             int                `json:"topics"`
+	Subscribers        int                `json:"subscribers"`
+	MessageRateTotal   float64            `json:"message_rate_total"`
 	MessageRateByTopic map[string]float64 `json:"message_rate_by_topic"`
 }
 
@@ -51,6 +88,11 @@ type Hub struct {
 	messageCount  map[string]int
 	lastCountTime time.Time
 	mu            sync.Mutex
+
+	// Message history for 1-minute window calculations
+	messageHistory [60]map[string]int
+	historyIndex   int
+	historyFilled  bool
 }
 
 // Client is a middleman between the websocket connection and the hub
@@ -68,7 +110,7 @@ type Subscription struct {
 
 // NewHub creates a new hub
 func NewHub() *Hub {
-	return &Hub{
+	h := &Hub{
 		broadcast:     make(chan Message),
 		register:      make(chan *Subscription),
 		unregister:    make(chan *Subscription),
@@ -78,7 +120,16 @@ func NewHub() *Hub {
 		stats: Stats{
 			MessageRateByTopic: make(map[string]float64),
 		},
+		historyIndex:  0,
+		historyFilled: false,
 	}
+
+	// Initialize message history slots
+	for i := 0; i < 60; i++ {
+		h.messageHistory[i] = make(map[string]int)
+	}
+
+	return h
 }
 
 // Run starts the hub's message handling
@@ -146,21 +197,55 @@ func (h *Hub) updateStats() {
 	h.stats.Subscribers = totalSubs
 }
 
-// updateMessageRates calculates message rates
+// updateMessageRates calculates message rates over a 1-minute window
 func (h *Hub) updateMessageRates() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	now := time.Now()
-	duration := now.Sub(h.lastCountTime).Seconds()
 
-	if duration > 0 {
+	// Store current counts in history
+	currentCounts := make(map[string]int)
+	for topic, count := range h.messageCount {
+		currentCounts[topic] = count
+	}
+
+	// Save current counts to history and reset current counts
+	h.messageHistory[h.historyIndex] = currentCounts
+	h.messageCount = make(map[string]int)
+
+	// Update history index
+	h.historyIndex = (h.historyIndex + 1) % 60
+	if h.historyIndex == 0 {
+		h.historyFilled = true
+	}
+
+	// Calculate rates based on 1-minute window
+	totalMessages := make(map[string]int)
+	for i := 0; i < 60; i++ {
+		if !h.historyFilled && i >= h.historyIndex {
+			break
+		}
+
+		for topic, count := range h.messageHistory[i] {
+			totalMessages[topic] += count
+		}
+	}
+
+	// Calculate window size in seconds
+	windowSize := 60.0
+	if !h.historyFilled {
+		windowSize = float64(h.historyIndex)
+	}
+
+	// Only calculate rates if we have some history
+	if windowSize > 0 {
+		// Calculate rates
 		total := 0.0
-		for topic, count := range h.messageCount {
-			rate := float64(count) / duration
+		for topic, count := range totalMessages {
+			rate := float64(count) / windowSize
 			h.stats.MessageRateByTopic[topic] = rate
 			total += rate
-			h.messageCount[topic] = 0
 		}
 		h.stats.MessageRateTotal = total
 	}
@@ -175,9 +260,9 @@ func (h *Hub) GetStats() Stats {
 
 	// Return a copy of the stats to avoid race conditions
 	statsCopy := Stats{
-		Topics:           h.stats.Topics,
-		Subscribers:      h.stats.Subscribers,
-		MessageRateTotal: h.stats.MessageRateTotal,
+		Topics:             h.stats.Topics,
+		Subscribers:        h.stats.Subscribers,
+		MessageRateTotal:   h.stats.MessageRateTotal,
 		MessageRateByTopic: make(map[string]float64),
 	}
 
@@ -320,15 +405,18 @@ func (h *Hub) handleStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	config := Config{
-		Host:            "",
-		Port:            "8080",
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-	}
+	config := LoadConfigFromEnv()
 
 	hub := NewHub()
 	go hub.Run()
+
+	upgrader = websocket.Upgrader{
+		ReadBufferSize:  config.ReadBufferSize,
+		WriteBufferSize: config.WriteBufferSize,
+		CheckOrigin: func(r *http.Request) bool {
+			return true // Allow all connections for simplicity
+		},
+	}
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		hub.handleWebSocket(w, r)

@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	serverAddr     = flag.String("server", "localhost:8080", "Server address")
+	serverAddr     = flag.String("server", getEnv("WS_HOST", "localhost")+":"+getEnv("WS_PORT", "8080"), "Server address")
 	numPublishers  = flag.Int("publishers", 1, "Number of publisher clients")
 	numSubscribers = flag.Int("subscribers", 10, "Number of subscriber clients")
 	numTopics      = flag.Int("topics", 5, "Number of topics")
@@ -30,6 +30,15 @@ type Message struct {
 	Action  string      `json:"action"`
 	Topic   string      `json:"topic"`
 	Payload interface{} `json:"payload"`
+}
+
+// Helper function to read environment variables with defaults
+func getEnv(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
 
 func main() {

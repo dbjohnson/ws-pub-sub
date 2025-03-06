@@ -1,5 +1,7 @@
 # ws-pub-sub
 
+[![Go](https://github.com/username/ws-pub-sub/actions/workflows/go.yml/badge.svg)](https://github.com/username/ws-pub-sub/actions/workflows/go.yml)
+
 A minimal Go WebSocket-based pub/sub server with topic-based message routing.
 
 ## Features
@@ -9,7 +11,8 @@ A minimal Go WebSocket-based pub/sub server with topic-based message routing.
 - Real-time statistics via HTTP endpoint
 - Simple web UI for testing
 - Concurrent handling of multiple connections
-- Message rate tracking
+- Message rate tracking (1-minute sliding window)
+- Configuration via environment variables
 
 ## Requirements
 
@@ -36,6 +39,17 @@ Or manually:
 go get -u github.com/gorilla/websocket
 ```
 
+## Configuration
+
+The server can be configured using the following environment variables:
+
+| Environment Variable | Description                          | Default Value       |
+| -------------------- | ------------------------------------ | ------------------- |
+| WS_HOST              | Host to bind the server to           | "" (all interfaces) |
+| WS_PORT              | Port to listen on                    | "8080"              |
+| WS_READ_BUFFER_SIZE  | WebSocket read buffer size in bytes  | 1024                |
+| WS_WRITE_BUFFER_SIZE | WebSocket write buffer size in bytes | 1024                |
+
 ## Usage
 
 ### Building and Running
@@ -46,13 +60,19 @@ Build the server:
 make build
 ```
 
-Run the server:
+Run the server with default configuration:
 
 ```bash
 make run
 ```
 
-The server will start on http://localhost:8080 by default.
+Run the server with custom configuration:
+
+```bash
+WS_PORT=9090 WS_READ_BUFFER_SIZE=2048 ./ws-pub-sub
+```
+
+The server will start on http://localhost:8080 by default (or the configured port).
 
 ### Available Endpoints
 
