@@ -74,34 +74,105 @@ func TestUpdateStats(t *testing.T) {
 func TestUpdateMessageRates(t *testing.T) {
 	hub := NewHub()
 
-	// Set up test data
+	// Helper function to compare floating point values with a delta
+	assertFloat := func(expected, actual float64, delta float64, msg string) {
+		if actual < expected-delta || actual > expected+delta {
+			t.Errorf("%s: expected %.2f (±%.2f), got %.2f", msg, expected, delta, actual)
+		}
+	}
+
+	// Simulate message processing over several time intervals
+
+	// First interval: 100 messages for topic1, 50 for topic2
 	hub.messageCount["topic1"] = 100
 	hub.messageCount["topic2"] = 50
+	hub.updateMessageRates() // This stores the first second of data
 
-	// Set lastCountTime to a specific time in the past
-	hub.lastCountTime = time.Now().Add(-10 * time.Second)
-
-	// Update message rates
-	hub.updateMessageRates()
-
-	// Check if rates were calculated correctly (approximately)
-	if hub.stats.MessageRateByTopic["topic1"] < 9.5 || hub.stats.MessageRateByTopic["topic1"] > 10.5 {
-		t.Errorf("Expected message rate for topic1 to be around 10, got %f", hub.stats.MessageRateByTopic["topic1"])
-	}
-
-	if hub.stats.MessageRateByTopic["topic2"] < 4.5 || hub.stats.MessageRateByTopic["topic2"] > 5.5 {
-		t.Errorf("Expected message rate for topic2 to be around 5, got %f", hub.stats.MessageRateByTopic["topic2"])
-	}
-
-	// Check total rate
-	if hub.stats.MessageRateTotal < 14.5 || hub.stats.MessageRateTotal > 15.5 {
-		t.Errorf("Expected total message rate to be around 15, got %f", hub.stats.MessageRateTotal)
-	}
+	// At this point, we have 1 second of history
+	// Expected rates: topic1=100/1, topic2=50/1
+	assertFloat(100.0, hub.stats.MessageRateByTopic["topic1"], 0.001, "First interval: Rate for topic1")
+	assertFloat(50.0, hub.stats.MessageRateByTopic["topic2"], 0.001, "First interval: Rate for topic2")
+	assertFloat(150.0, hub.stats.MessageRateTotal, 0.001, "First interval: Total rate")
 
 	// Check that message counts were reset
-	if hub.messageCount["topic1"] != 0 || hub.messageCount["topic2"] != 0 {
-		t.Error("Expected message counts to be reset to 0")
+	if len(hub.messageCount) != 0 {
+		t.Error("Expected message counts to be reset to empty map")
 	}
+
+	// Second interval: 50 messages for topic1, 0 for topic2, 25 for topic3
+	hub.messageCount["topic1"] = 50
+	hub.messageCount["topic3"] = 25
+	hub.updateMessageRates() // This stores the second second of data
+
+	// At this point, we have 2 seconds of history
+	// Expected average rates:
+	// topic1: (100+50)/2 = 75 per second
+	// topic2: (50+0)/2 = 25 per second
+	// topic3: (0+25)/2 = 12.5 per second
+	assertFloat(75.0, hub.stats.MessageRateByTopic["topic1"], 0.001, "Second interval: Rate for topic1")
+	assertFloat(25.0, hub.stats.MessageRateByTopic["topic2"], 0.001, "Second interval: Rate for topic2")
+	assertFloat(12.5, hub.stats.MessageRateByTopic["topic3"], 0.001, "Second interval: Rate for topic3")
+	assertFloat(112.5, hub.stats.MessageRateTotal, 0.001, "Second interval: Total rate")
+
+	// Third interval: simulate a longer time period with multiple updates
+	// Add 5 more updates with varying message counts
+	messagePatterns := []map[string]int{
+		{"topic1": 30, "topic2": 20},               // 3rd second
+		{"topic1": 40, "topic3": 10},               // 4th second
+		{"topic2": 60, "topic3": 20},               // 5th second
+		{"topic1": 20, "topic2": 30, "topic3": 40}, // 6th second
+		{"topic1": 10, "topic2": 10, "topic3": 10}, // 7th second
+	}
+
+	for _, pattern := range messagePatterns {
+		// Set message counts for this interval
+		for topic, count := range pattern {
+			hub.messageCount[topic] = count
+		}
+		hub.updateMessageRates()
+	}
+
+	// At this point, we have 7 seconds of history
+	// Calculate expected rates manually
+	topic1Total := 100 + 50 + 30 + 40 + 0 + 20 + 10 // = 250
+	topic2Total := 50 + 0 + 20 + 0 + 60 + 30 + 10   // = 170
+	topic3Total := 0 + 25 + 0 + 10 + 20 + 40 + 10   // = 105
+
+	expectedTopic1Rate := float64(topic1Total) / 7.0 // = 35.71
+	expectedTopic2Rate := float64(topic2Total) / 7.0 // = 24.29
+	expectedTopic3Rate := float64(topic3Total) / 7.0 // = 15.0
+	expectedTotalRate := expectedTopic1Rate + expectedTopic2Rate + expectedTopic3Rate
+
+	// Verify rates
+	assertFloat(expectedTopic1Rate, hub.stats.MessageRateByTopic["topic1"], 0.01, "Multi-interval: Rate for topic1")
+	assertFloat(expectedTopic2Rate, hub.stats.MessageRateByTopic["topic2"], 0.01, "Multi-interval: Rate for topic2")
+	assertFloat(expectedTopic3Rate, hub.stats.MessageRateByTopic["topic3"], 0.01, "Multi-interval: Rate for topic3")
+	assertFloat(expectedTotalRate, hub.stats.MessageRateTotal, 0.01, "Multi-interval: Total rate")
+
+	// Test that old data rolls off when we exceed 60 seconds
+	// For simplicity, let's just overwrite our history index
+	// and set historyFilled to simulate a complete buffer
+	hub.historyIndex = 0
+	hub.historyFilled = true
+
+	// Clear all history slots
+	for i := 0; i < 60; i++ {
+		hub.messageHistory[i] = make(map[string]int)
+	}
+
+	// Add a consistent pattern over the full 60-second window
+	// Each second has 60 messages for topic1
+	for i := 0; i < 60; i++ {
+		hub.messageHistory[i] = map[string]int{"topic1": 60}
+	}
+
+	// Now add a new data point - this should push out the oldest entry
+	hub.messageCount["topic1"] = 120 // Double the rate for latest second
+	hub.updateMessageRates()
+
+	// We replaced one second of 60 messages with one second of 120 messages
+	// So the average should be slightly higher: (59*60 + 120)/60 = 61
+	assertFloat(61.0, hub.stats.MessageRateByTopic["topic1"], 0.01, "Sliding window: Rate for topic1")
 }
 
 func TestGetStats(t *testing.T) {

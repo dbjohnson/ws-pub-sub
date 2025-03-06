@@ -1,4 +1,4 @@
-module github.com/username/ws-pub-sub
+module github.com/dbjohnson/ws-pub-sub
 
 go 1.21.6
 
