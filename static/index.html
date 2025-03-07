@@ -211,8 +211,7 @@
                 <pre>${content}</pre>
                 <small>${new Date().toLocaleTimeString()}</small>
             `;
-      messagesContainer.appendChild(messageElement);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      messagesContainer.insertBefore(messageElement, messagesContainer.firstChild);
     }
 
     function subscribe(topic) {
