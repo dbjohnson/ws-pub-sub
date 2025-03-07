@@ -7,11 +7,14 @@
   <title>WebSocket Pub/Sub Dashboard</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Courier New', monospace;
       max-width: 800px;
       margin: 0 auto;
       padding: 20px;
       line-height: 1.6;
+      background-color: #000;
+      color: #FFBF00;
+      /* Amber text */
     }
 
     .container {
@@ -21,22 +24,24 @@
 
     .panel {
       flex: 1;
-      border: 1px solid #ccc;
+      border: 1px solid #FFBF00;
       border-radius: 5px;
       padding: 15px;
+      background-color: #111;
     }
 
     .message-container {
       height: 300px;
       overflow-y: auto;
-      border: 1px solid #ddd;
+      border: 1px solid #FFBF00;
       border-radius: 3px;
       margin-bottom: 10px;
       padding: 10px;
+      background-color: #111;
     }
 
     .message {
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid #663D00;
       padding: 5px 0;
     }
 
@@ -52,6 +57,10 @@
       margin-bottom: 10px;
       padding: 8px;
       box-sizing: border-box;
+      background-color: #222;
+      color: #FFBF00;
+      border: 1px solid #FFBF00;
+      font-family: 'Courier New', monospace;
     }
 
     textarea {
@@ -60,14 +69,24 @@
     }
 
     button {
-      background-color: #4CAF50;
-      color: white;
-      border: none;
+      background-color: #222;
+      color: #FFBF00;
+      border: 1px solid #FFBF00;
       cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.3s;
     }
 
     button:hover {
-      background-color: #45a049;
+      background-color: #333;
+      border-color: #FFD700;
+    }
+
+    pre {
+      background-color: #111;
+      padding: 8px;
+      border-radius: 3px;
+      overflow-x: auto;
     }
 
     .status {
@@ -76,18 +95,27 @@
     }
 
     .status.connected {
-      color: green;
+      color: #00FF00;
+      /* Green for connected status */
     }
 
     .status.disconnected {
-      color: red;
+      color: #FF0000;
+      /* Red for disconnected status */
     }
 
     #stats {
       margin-top: 20px;
       padding: 15px;
-      background-color: #f9f9f9;
+      background-color: #111;
       border-radius: 5px;
+      border: 1px solid #FFBF00;
+    }
+
+    h1,
+    h2 {
+      color: #FFD700;
+      /* Slightly brighter amber for headings */
     }
   </style>
 </head>
