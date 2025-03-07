@@ -75,9 +75,8 @@ WS_PORT=9090 WS_READ_BUFFER_SIZE=2048 ./ws-pub-sub
 The server will start on http://localhost:8080 by default (or the configured port).
 
 ### Available Endpoints
-
-- `/` - Web UI for testing
-- `/ws` - WebSocket endpoint for pub/sub operations
+- `/` - WebSocket endpoint for pub/sub operations
+- `/dashboard` - Web UI for testing
 - `/stats` - HTTP endpoint for server statistics
 
 ## WebSocket Protocol

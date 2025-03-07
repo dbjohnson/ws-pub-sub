@@ -418,7 +418,7 @@ func main() {
 		},
 	}
 
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		hub.handleWebSocket(w, r)
 	})
 
@@ -427,7 +427,7 @@ func main() {
 	})
 
 	// Serve a simple HTML page for testing
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/index.html")
 	})
 
