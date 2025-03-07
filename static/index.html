@@ -117,6 +117,18 @@
       color: #FFD700;
       /* Slightly brighter amber for headings */
     }
+
+    .topic-link {
+      color: #FFA500;
+      text-decoration: underline;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .topic-link:hover {
+      color: #FFD700;
+      text-decoration: underline;
+    }
   </style>
 </head>
 
@@ -276,7 +288,35 @@
       fetch(statsUrl)
         .then(response => response.json())
         .then(data => {
-          document.getElementById('stats-content').textContent = JSON.stringify(data, null, 2);
+          // Format and display stats with hyperlinks and rounded values
+          const statsContent = document.getElementById('stats-content');
+
+          // Start building a formatted display
+          let formattedStats = `Topics: ${data.topics}\n`;
+          formattedStats += `Subscribers: ${data.subscribers}\n`;
+          formattedStats += `Message Rate Total: ${data.message_rate_total.toFixed(2)} msg/sec\n\n`;
+
+          // Add message rates by topic with hyperlinks
+          formattedStats += "Message Rates by Topic:\n";
+
+          for (const [topic, rate] of Object.entries(data.message_rate_by_topic)) {
+            // Round rate to 2 decimal places
+            const roundedRate = rate.toFixed(2);
+            // Add the topic as a clickable link
+            formattedStats += `  <a href="#" class="topic-link" data-topic="${topic}">${topic}</a>: ${roundedRate} msg/sec\n`;
+          }
+
+          // Set the formatted content
+          statsContent.innerHTML = formattedStats;
+
+          // Add click event listeners to the topic links
+          document.querySelectorAll('.topic-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+              e.preventDefault();
+              const topic = e.target.getAttribute('data-topic');
+              subscribe(topic);
+            });
+          });
         })
         .catch(error => {
           document.getElementById('stats-content').textContent = `Error fetching stats: ${error.message}`;
