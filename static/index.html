@@ -171,7 +171,7 @@
   <script>
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const base = window.location.href.replace(/\/dashboard$/, '');
-    const wsUrl = base;
+    const wsUrl = `{$base}/`;
     const statsUrl = `${base}/stats`;
 
     let socket;
