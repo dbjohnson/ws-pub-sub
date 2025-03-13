@@ -170,8 +170,9 @@
 
   <script>
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
-    const statsUrl = `${window.location.protocol}//${window.location.host}/stats`;
+    const base = window.location.href.replace(/\/dashboard$/, '');
+    const wsUrl = `${base}/ws`;
+    const statsUrl = `${base}/stats`;
 
     let socket;
     let subscribedTopics = new Set();
